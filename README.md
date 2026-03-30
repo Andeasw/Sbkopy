@@ -52,4 +52,5 @@ export DOMAIN_KEY=""
 
 ---
 
-**Fork** from [eooce/python-xray-argo](https://github.com/eooce/python-xray-argo).
+**Fork** from [eooce/python-xray-argo](https://github.com/eooce/python-xray-argo) and [eooce/Sing-box](https://github.com/eooce/Sing-box).
+
