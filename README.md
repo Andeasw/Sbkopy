@@ -1,69 +1,35 @@
 ```bash
-# Configuration for Subscription Upload URL
 export UPLOAD_URL=""
-
-# Project Keep-alive URL
 export PROJECT_URL=""
-
-# Auto Keep-alive setting (Set to "true" to enable auto keep-alive, default is "false")
 export AUTO_ACCESS="false"
-
-# Running path (default is ".cache", can be customized)
 export FILE_PATH=".cache"
-
-# Subscription token route (default is "sub")
 export SUB_PATH="sub"
-
-# Unique Identifier (UUID, default is "60a44bd5-a07b-4ab4-a61f-0eb6f64cfc22", can be customized)
 export UUID="f929c4da-dc2e-4e0d-9a6f-1799036af214"
-
-# Nezha panel domain, port, and key
 export NEZHA_SERVER=""
 export NEZHA_PORT=""
 export NEZHA_KEY=""
-
-# Komari panel address and key
 export KOMARI_SERVER=""
 export KOMARI_KEY=""
-
-# Argo tunnel domain, auth key, and port
 export ARGO_DOMAIN=""
 export ARGO_AUTH=""
 export ARGO_PORT="8001"
-
-# SOCKS5, TUIC, HY2, AnyTLS, Reality, and AnyReality protocol ports (leave empty or set to required port)
 export S5_PORT=""
 export TUIC_PORT=""
 export HY2_PORT=""
 export ANYTLS_PORT=""
 export REALITY_PORT=""
 export ANYREALITY_PORT=""
-
-# Cloudflare preferred IP or domain (default is "sub.danfeng.eu.org")
 export CFIP="cdns.doon.eu.org"
-
-# Cloudflare preferred port (default is 443)
 export CFPORT="443"
-
-# HTTP service/subscription port (default is 3000)
 export PORT="3000"
-
-# Node name (leave empty or fill as required)
 export NAME=""
-
-# Telegram chat_id and bot_token for Telegram bot interaction
 export CHAT_ID=""
 export BOT_TOKEN=""
-
-# Disable Argo tunnel setting (default is "false")
-export DISABLE_ARGO="false"
-
-# Custom certificate domain and certificate download links
+export DISABLE_ARGO="true"
 export DOMAIN_NAME=""
 export DOMAIN_CERT=""
 export DOMAIN_KEY=""
 ```
-
 ### Configuration Explanation
 
 * **UPLOAD_URL**: Subscription upload URL, leave empty or fill in the appropriate URL.
