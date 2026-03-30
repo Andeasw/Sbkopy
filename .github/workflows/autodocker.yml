@@ -16,7 +16,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,19 +30,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Set repository owner to lowercase
-        id: lowercase
-        run: echo "REPO_OWNER=${{ github.repository_owner | lower }}" >> $GITHUB_ENV  # Ensure lowercase
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ env.REPO_OWNER }}/python:latest  # Use lowercase repository owner
+            # 修正点：将 github.repository_owner 和 github.repository 都转换为小写
+            # ghcr.io/${{ github.repository | lower }}:latest # 这种写法会包含 owner/repo-name
+            # 如果你只想用 repo-name，需要进一步处理
+            ghcr.io/${{ github.repository_owner | lower }}/app:latest # 假设你的镜像名是 app
+            # 或者如果你想使用仓库名称作为镜像名称，且仓库名称就是 repo-name
+            # ghcr.io/${{ github.repository | split('/') | last | lower }}:latest
+            # 考虑到你的原始tag是 "python:latest"，我保持了 'python' 作为镜像名
+            ghcr.io/${{ github.repository_owner | lower }}/python:latest
           labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository | lower }} # 保持一致，尽管这里不强制小写
             org.opencontainers.image.description=Python Server
             org.opencontainers.image.licenses=MIT
           cache-from: type=gha
