@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import re
 import json
@@ -21,7 +22,6 @@ PROJECT_URL = os.environ.get('PROJECT_URL', '')
 AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() == 'true'
 FILE_PATH = os.environ.get('FILE_PATH', '.cache')
 SUB_PATH = os.environ.get('SUB_PATH', 'subb')
-
 UUID = os.environ.get('UUID', '0d6ad30d-bede-49c3-bb88-c52100931e4e')
 NEZHA_SERVER = os.environ.get('NEZHA_SERVER', '')
 NEZHA_PORT = os.environ.get('NEZHA_PORT', '')
@@ -31,6 +31,7 @@ KOMARI_KEY = os.environ.get('KOMARI_KEY', '')
 ARGO_DOMAIN = os.environ.get('ARGO_DOMAIN', '')
 ARGO_AUTH = os.environ.get('ARGO_AUTH', '')
 ARGO_PORT = int(os.environ.get('ARGO_PORT', '8001'))
+ARGO_VMESS_PORT = ARGO_PORT + 1
 S5_PORT_STR = os.environ.get('S5_PORT', '')
 TUIC_PORT_STR = os.environ.get('TUIC_PORT', '')
 HY2_PORT_STR = os.environ.get('HY2_PORT', '')
@@ -46,7 +47,6 @@ CHAT_ID = os.environ.get('CHAT_ID', '')
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
 DISABLE_ARGO = os.environ.get('DISABLE_ARGO', 'true').lower() == 'true'
 REALITY_DOMAIN = os.environ.get('REALITY_DOMAIN', 'www.iij.ad.jp')
-
 DOMAIN_NAME = os.environ.get('DOMAIN_NAME', '')
 DOMAIN_CERT = os.environ.get('DOMAIN_CERT', '')
 DOMAIN_KEY = os.environ.get('DOMAIN_KEY', '')
@@ -65,7 +65,7 @@ public_key = ''
 short_id = ''
 tuic_password = ''
 socks_password = ''
-hy2_password = '' # Password for Salamander Obfuscation
+hy2_password = ''
 use_custom_cert = False
 domain_name = ''
 
@@ -245,7 +245,13 @@ protocol: http2
 
 ingress:
   - hostname: {ARGO_DOMAIN}
+    path: /vless-argo
     service: http://localhost:{ARGO_PORT}
+    originRequest:
+      noTLSVerify: true
+  - hostname: {ARGO_DOMAIN}
+    path: /vmess-argo
+    service: http://localhost:{ARGO_VMESS_PORT}
     originRequest:
       noTLSVerify: true
   - service: http_status:404
@@ -304,7 +310,6 @@ async def download_files_and_run():
             if private_key and public_key and short_id and tuic_password and socks_password:
                 need_generate = False
                 
-                # Backward compatibility: Resave to store generated hy2_password if it was missing
                 if 'hy2_password' not in data:
                     with open(persist_file, 'w') as f:
                         json.dump({
@@ -332,7 +337,6 @@ async def download_files_and_run():
             print("Failed to extract privateKey or publicKey from output.")
             return
         
-        # 8 Hex Digits (4 bytes), 32 Hex Digits (16 bytes), 16 Hex Digits (8 bytes)
         short_id = os.urandom(4).hex()
         tuic_password = os.urandom(16).hex()
         socks_password = os.urandom(8).hex()
@@ -403,10 +407,22 @@ uuid: {UUID}"""
         "log": {"disabled": True, "level": "info", "timestamp": True},
         "inbounds":[
             {
+                "tag": "vless-ws-in",
+                "type": "vless",
+                "listen": "::",
+                "listen_port": ARGO_PORT,
+                "users":[{"uuid": UUID, "flow": ""}],
+                "transport": {
+                    "type": "ws",
+                    "path": "/vless-argo",
+                    "early_data_header_name": "Sec-WebSocket-Protocol"
+                }
+            },
+            {
                 "tag": "vmess-ws-in",
                 "type": "vmess",
                 "listen": "::",
-                "listen_port": ARGO_PORT,
+                "listen_port": ARGO_VMESS_PORT,
                 "users":[{"uuid": UUID}],
                 "transport": {
                     "type": "ws",
@@ -427,8 +443,8 @@ uuid: {UUID}"""
                     "address": "engage.cloudflareclient.com",
                     "port": 2408,
                     "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
-                    "allowed_ips": ["0.0.0.0/0", "::/0"],
-                    "reserved": [78, 135, 76]
+                    "allowed_ips":["0.0.0.0/0", "::/0"],
+                    "reserved":[78, 135, 76]
                   }
               ]
           }
@@ -455,7 +471,7 @@ uuid: {UUID}"""
     if REALITY_PORT and REALITY_PORT > 0:
         reality_config = {
             "tag": "vless-in", "type": "vless", "listen": "::", "listen_port": REALITY_PORT,
-            "users": [{"uuid": UUID, "flow": "xtls-rprx-vision"}],
+            "users":[{"uuid": UUID, "flow": "xtls-rprx-vision"}],
             "tls": {
                 "enabled": True, "server_name": REALITY_DOMAIN,
                 "reality": {
@@ -520,7 +536,7 @@ uuid: {UUID}"""
     
     if NEZHA_SERVER and NEZHA_PORT and NEZHA_KEY:
         tls_ports =['443', '8443', '2096', '2087', '2083', '2053']
-        nezha_tls = '--tls' if NEZHA_PORT in tls_ports else ''
+        nezha_tls = '--tls' if str(NEZHA_PORT) in tls_ports else ''
         command = f"nohup {os.path.join(FILE_PATH, 'npm')} -s {NEZHA_SERVER}:{NEZHA_PORT} -p {NEZHA_KEY} {nezha_tls} >/dev/null 2>&1 &"
         try:
             exec_cmd(command)
@@ -600,7 +616,7 @@ async def extract_domains():
                 try: exec_cmd('pkill -f "[b]ot" > /dev/null 2>&1')
                 except: pass
                 time.sleep(1)
-                args = f'tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {FILE_PATH}/boot.log --loglevel info --url http://localhost:{ARGO_PORT}'
+                args = f'tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {FILE_PATH}/boot.log --loglevel info --url http://localhost:{ARGO_VMESS_PORT}'
                 exec_cmd(f'nohup {os.path.join(FILE_PATH, "bot")} {args} >/dev/null 2>&1 &')
                 time.sleep(6)
                 await extract_domains()
@@ -655,11 +671,16 @@ async def generate_links(argo_domain):
 
     sub_txt = ""
     if not DISABLE_ARGO and argo_domain:
+        vless_path = "%2Fvless-argo%3Fed%3D2560"
+        vless_node = f"vless://{UUID}@{CFIP}:{CFPORT}?encryption=none&security=tls&sni={argo_domain}&type=ws&host={argo_domain}&path={vless_path}&fp=firefox#{Nodename}-VLESS"
+        
         vmess_config = {
-            "v": "2","ps": f"{Nodename}","add": CFIP,"port": CFPORT,"id": UUID,"aid": "0","scy": "auto","net": "ws","type": "none",
+            "v": "2","ps": f"{Nodename}-VMess","add": CFIP,"port": CFPORT,"id": UUID,"aid": "0","scy": "auto","net": "ws","type": "none",
             "host": argo_domain,"path": "/vmess-argo?ed=2560","tls": "tls","sni": argo_domain,"alpn": "","fp": "firefox"
         }
-        sub_txt = f"vmess://{base64.b64encode(json.dumps(vmess_config).encode()).decode()}"
+        vmess_node = f"vmess://{base64.b64encode(json.dumps(vmess_config).encode()).decode()}"
+        
+        sub_txt = f"{vless_node}\n{vmess_node}"
 
     if TUIC_PORT is not None:
         insecure_flag = "" if use_custom_cert else "&allow_insecure=1"
@@ -675,8 +696,8 @@ async def generate_links(argo_domain):
         sub_txt = (sub_txt + hysteria_node) if sub_txt else hysteria_node
 
     if REALITY_PORT is not None:
-        vless_node = f"\nvless://{UUID}@{SERVER_IP}:{REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni={REALITY_DOMAIN}&fp=firefox&pbk={public_key}&sid={short_id}&type=tcp&headerType=none#{Nodename}"
-        sub_txt = (sub_txt + vless_node) if sub_txt else vless_node
+        vless_node_real = f"\nvless://{UUID}@{SERVER_IP}:{REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni={REALITY_DOMAIN}&fp=firefox&pbk={public_key}&sid={short_id}&type=tcp&headerType=none#{Nodename}-Reality"
+        sub_txt = (sub_txt + vless_node_real) if sub_txt else vless_node_real
 
     if ANYTLS_PORT is not None:
         insecure_flag = "" if use_custom_cert else "&insecure=1&allowInsecure=1"
