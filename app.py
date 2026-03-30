@@ -21,6 +21,7 @@ PROJECT_URL = os.environ.get('PROJECT_URL', '')
 AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() == 'true'
 FILE_PATH = os.environ.get('FILE_PATH', '.cache')
 SUB_PATH = os.environ.get('SUB_PATH', 'subb')
+
 UUID = os.environ.get('UUID', '0d6ad30d-bede-49c3-bb88-c52100931e4e')
 NEZHA_SERVER = os.environ.get('NEZHA_SERVER', '')
 NEZHA_PORT = os.environ.get('NEZHA_PORT', '')
@@ -33,6 +34,7 @@ ARGO_PORT = int(os.environ.get('ARGO_PORT', '8001'))
 S5_PORT_STR = os.environ.get('S5_PORT', '')
 TUIC_PORT_STR = os.environ.get('TUIC_PORT', '')
 HY2_PORT_STR = os.environ.get('HY2_PORT', '')
+HY2_OBFS = os.environ.get('HY2_OBFS', 'false').lower() == 'true'
 ANYTLS_PORT_STR = os.environ.get('ANYTLS_PORT', '')
 REALITY_PORT_STR = os.environ.get('REALITY_PORT', '')
 ANYREALITY_PORT_STR = os.environ.get('ANYREALITY_PORT', '')
@@ -45,7 +47,6 @@ BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
 DISABLE_ARGO = os.environ.get('DISABLE_ARGO', 'true').lower() == 'true'
 REALITY_DOMAIN = os.environ.get('REALITY_DOMAIN', 'www.iij.ad.jp')
 
-# Custom Certificate Variables
 DOMAIN_NAME = os.environ.get('DOMAIN_NAME', '')
 DOMAIN_CERT = os.environ.get('DOMAIN_CERT', '')
 DOMAIN_KEY = os.environ.get('DOMAIN_KEY', '')
@@ -64,6 +65,7 @@ public_key = ''
 short_id = ''
 tuic_password = ''
 socks_password = ''
+hy2_password = '' # Password for Salamander Obfuscation
 use_custom_cert = False
 domain_name = ''
 
@@ -111,7 +113,7 @@ def delete_nodes():
         return None
 
 def cleanup_old_files():
-    paths_to_delete = ['web', 'bot', 'npm', 'km', 'boot.log', 'list.txt']
+    paths_to_delete =['web', 'bot', 'npm', 'km', 'boot.log', 'list.txt']
     for file in paths_to_delete:
         file_path = os.path.join(FILE_PATH, file)
         try:
@@ -264,7 +266,7 @@ def exec_cmd(command):
         return str(e)
 
 async def download_files_and_run():
-    global private_key, public_key, short_id, tuic_password, socks_password, use_custom_cert, domain_name
+    global private_key, public_key, short_id, tuic_password, socks_password, hy2_password, use_custom_cert, domain_name
     
     architecture = get_system_architecture()
     files_to_download = get_files_for_architecture(architecture)
@@ -297,8 +299,22 @@ async def download_files_and_run():
             short_id = data.get('short_id')
             tuic_password = data.get('tuic_password')
             socks_password = data.get('socks_password')
+            hy2_password = data.get('hy2_password', os.urandom(16).hex())
+            
             if private_key and public_key and short_id and tuic_password and socks_password:
                 need_generate = False
+                
+                # Backward compatibility: Resave to store generated hy2_password if it was missing
+                if 'hy2_password' not in data:
+                    with open(persist_file, 'w') as f:
+                        json.dump({
+                            'private_key': private_key,
+                            'public_key': public_key,
+                            'short_id': short_id,
+                            'tuic_password': tuic_password,
+                            'socks_password': socks_password,
+                            'hy2_password': hy2_password
+                        }, f)
                 print("Successfully loaded persisted keys and passwords.")
         except Exception as e:
             print(f"Error reading persist file: {e}")
@@ -320,6 +336,7 @@ async def download_files_and_run():
         short_id = os.urandom(4).hex()
         tuic_password = os.urandom(16).hex()
         socks_password = os.urandom(8).hex()
+        hy2_password = os.urandom(16).hex()
 
         with open(persist_file, 'w') as f:
             json.dump({
@@ -327,7 +344,8 @@ async def download_files_and_run():
                 'public_key': public_key,
                 'short_id': short_id,
                 'tuic_password': tuic_password,
-                'socks_password': socks_password
+                'socks_password': socks_password,
+                'hy2_password': hy2_password
             }, f)
 
     cert_path = os.path.join(FILE_PATH, 'tls_cert.pem')
@@ -389,7 +407,7 @@ uuid: {UUID}"""
                 "type": "vmess",
                 "listen": "::",
                 "listen_port": ARGO_PORT,
-                "users": [{"uuid": UUID}],
+                "users":[{"uuid": UUID}],
                 "transport": {
                     "type": "ws",
                     "path": "/vmess-argo",
@@ -415,7 +433,7 @@ uuid: {UUID}"""
               ]
           }
         ],
-        "outbounds": [{"type": "direct", "tag": "direct"}],
+        "outbounds":[{"type": "direct", "tag": "direct"}],
         "route": {
             "rule_set":[
                 {
@@ -455,12 +473,14 @@ uuid: {UUID}"""
             "masquerade": "https://www.bing.com",
             "tls": {"enabled": True, "certificate_path": cert_path, "key_path": key_path}
         }
+        if HY2_OBFS:
+            hysteria_config["obfs"] = {"type": "salamander", "password": hy2_password}
         config["inbounds"].append(hysteria_config)
     
     if TUIC_PORT and TUIC_PORT > 0:
         tuic_config = {
             "tag": "tuic-in", "type": "tuic", "listen": "::", "listen_port": TUIC_PORT,
-            "users": [{"uuid": UUID, "password": tuic_password}],
+            "users":[{"uuid": UUID, "password": tuic_password}],
             "congestion_control": "bbr",
             "tls": {"enabled": True, "alpn":["h3"], "certificate_path": cert_path, "key_path": key_path}
         }
@@ -598,7 +618,7 @@ def upload_nodes():
     elif UPLOAD_URL:
         if not os.path.exists(list_path): return
         with open(list_path, 'r') as f: content = f.read()
-        nodes = [line for line in content.split('\n') if any(protocol in line for protocol in['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://', 'anytls://', 'socks://'])]
+        nodes =[line for line in content.split('\n') if any(protocol in line for protocol in['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://', 'anytls://', 'socks://'])]
         if not nodes: return
         try:
             requests.post(f"{UPLOAD_URL}/api/add-nodes",
@@ -648,7 +668,10 @@ async def generate_links(argo_domain):
 
     if HY2_PORT is not None:
         insecure_flag = "" if use_custom_cert else "&insecure=1"
-        hysteria_node = f"\nhysteria2://{UUID}@{SERVER_IP}:{HY2_PORT}/?sni={domain_name}&obfs=none{insecure_flag}#{Nodename}"
+        if HY2_OBFS:
+            hysteria_node = f"\nhysteria2://{UUID}@{SERVER_IP}:{HY2_PORT}/?sni={domain_name}&obfs=salamander&obfs-password={hy2_password}{insecure_flag}#{Nodename}"
+        else:
+            hysteria_node = f"\nhysteria2://{UUID}@{SERVER_IP}:{HY2_PORT}/?sni={domain_name}&obfs=none{insecure_flag}#{Nodename}"
         sub_txt = (sub_txt + hysteria_node) if sub_txt else hysteria_node
 
     if REALITY_PORT is not None:
