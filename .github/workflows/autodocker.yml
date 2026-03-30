@@ -33,7 +33,7 @@ jobs:
 
       - name: Set repository owner to lowercase
         id: lowercase
-        run: echo "REPO_OWNER=${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]' > $GITHUB_ENV
+        run: echo "REPO_OWNER=${{ github.repository_owner | lower }}" >> $GITHUB_ENV  # Ensure lowercase
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
