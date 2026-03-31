@@ -39,8 +39,8 @@ jobs:
       - name: Set lower case variables
         id: set_vars
         run: |
-          REPO_OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          REPO_NAME_LOWER=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2 | tr '[:upper:]' '[:lower:]')
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION_TAG="${{ github.event.inputs.version }}"
@@ -48,8 +48,8 @@ jobs:
             VERSION_TAG="${{ github.sha }}"
           fi
 
-          echo "REPO_OWNER=$REPO_OWNER_LOWER" >> "$GITHUB_OUTPUT"
-          echo "REPO_NAME=$REPO_NAME_LOWER" >> "$GITHUB_OUTPUT"
+          echo "REPO_OWNER=$REPO_OWNER" >> "$GITHUB_OUTPUT"
+          echo "REPO_NAME=$REPO_NAME" >> "$GITHUB_OUTPUT"
           echo "VERSION=$VERSION_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
