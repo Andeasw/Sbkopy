@@ -68,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
+          push: ${{ github.repository_owner == 'andeasw' && github.event_name != 'pull_request' }}
           tags: ${{ steps.set_vars.outputs.IMAGE_TAGS }} 
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
