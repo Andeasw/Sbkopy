@@ -22,7 +22,7 @@ PROJECT_URL = os.environ.get('PROJECT_URL', '')
 AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() == 'true'
 FILE_PATH = os.environ.get('FILE_PATH', '.cache')
 SUB_PATH = os.environ.get('SUB_PATH', 'subb')
-UUID = os.environ.get('UUID', '0d6ad30d-bede-49c3-bb88-c52100931e4e')
+UUID = os.environ.get('UUID', 'c828d2bb-97ae-45f5-b38b-fb375b1985b9')
 NEZHA_SERVER = os.environ.get('NEZHA_SERVER', '')
 NEZHA_PORT = os.environ.get('NEZHA_PORT', '')
 NEZHA_KEY = os.environ.get('NEZHA_KEY', '')
@@ -78,6 +78,49 @@ sub_path = os.path.join(FILE_PATH, 'sub.txt')
 list_path = os.path.join(FILE_PATH, 'list.txt')
 boot_log_path = os.path.join(FILE_PATH, 'boot.log')
 config_path = os.path.join(FILE_PATH, 'config.json')
+
+km_state = {
+    "proc": None,
+    "crash_count": 0,
+    "stopped": False
+}
+
+def start_komari_daemon(bin_path, endpoint, token):
+    def run_loop():
+        while not km_state["stopped"]:
+            if not os.path.exists(bin_path):
+                km_state["stopped"] = True
+                break
+
+            start_time = time.time()
+            try:
+                proc = subprocess.Popen(
+                    [bin_path, '-e', endpoint, '-t', token],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                km_state["proc"] = proc
+                proc.wait()  # Block until process exits/crashes
+            except Exception:
+                pass
+            finally:
+                km_state["proc"] = None
+
+            if km_state["stopped"] or not os.path.exists(bin_path):
+                break
+
+            live_ms = (time.time() - start_time) * 1000
+            if live_ms > 30000:
+                km_state["crash_count"] = 0
+            else:
+                km_state["crash_count"] += 1
+
+            delay_ms = min(2000 * (2 ** km_state["crash_count"]), 60000)
+            time.sleep(delay_ms / 1000.0)
+
+    t = threading.Thread(target=run_loop, daemon=True)
+    t.start()
+# ────────────────────────────────────────────────────────────
 
 def create_directory():
     print('\033c', end='')
@@ -554,14 +597,11 @@ uuid: {UUID}"""
             pass
             
     if KOMARI_SERVER and KOMARI_KEY:
-        k_server = KOMARI_SERVER if KOMARI_SERVER.startswith('http') else f"https://{KOMARI_SERVER}"
-        command = f"nohup {os.path.join(FILE_PATH, 'km')} -e {k_server} -t {KOMARI_KEY} >/dev/null 2>&1 &"
-        try:
-            exec_cmd(command)
-            print('Komari probe is running')
-            time.sleep(1)
-        except Exception:
-            pass
+        k_server = KOMARI_SERVER.strip()
+        k_server = k_server if k_server.startswith('http') else f"https://{k_server}"
+        k_server = k_server.rstrip('/')
+        start_komari_daemon(os.path.join(FILE_PATH, 'km'), k_server, KOMARI_KEY.strip())
+        print(f'Komari probe is running on {k_server}')
     
     command = f"nohup {os.path.join(FILE_PATH, 'web')} run -c {os.path.join(FILE_PATH, 'config.json')} >/dev/null 2>&1 &"
     try:
@@ -616,7 +656,7 @@ async def extract_domains():
                 try: exec_cmd('pkill -f "[b]ot" > /dev/null 2>&1')
                 except: pass
                 time.sleep(1)
-                args = f'tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {FILE_PATH}/boot.log --loglevel info --url http://localhost:{ARGO_VMESS_PORT}'
+                args = f'tunnel --edge-ip-version auto --no-autoupdate --protocol http2 --logfile {FILE_PATH}/boot.log --loglevel info --url http://localhost:{ARGO_PORT}'
                 exec_cmd(f'nohup {os.path.join(FILE_PATH, "bot")} {args} >/dev/null 2>&1 &')
                 time.sleep(6)
                 await extract_domains()
@@ -674,13 +714,15 @@ async def generate_links(argo_domain):
         vless_path = "%2Fvless-argo%3Fed%3D2560"
         vless_node = f"vless://{UUID}@{CFIP}:{CFPORT}?encryption=none&security=tls&sni={argo_domain}&type=ws&host={argo_domain}&path={vless_path}&fp=firefox#{Nodename}-VLESS"
         
-        vmess_config = {
-            "v": "2","ps": f"{Nodename}-VMess","add": CFIP,"port": CFPORT,"id": UUID,"aid": "0","scy": "auto","net": "ws","type": "none",
-            "host": argo_domain,"path": "/vmess-argo?ed=2560","tls": "tls","sni": argo_domain,"alpn": "","fp": "firefox"
-        }
-        vmess_node = f"vmess://{base64.b64encode(json.dumps(vmess_config).encode()).decode()}"
+        sub_txt = f"{vless_node}"
         
-        sub_txt = f"{vless_node}\n{vmess_node}"
+        if ARGO_AUTH:
+            vmess_config = {
+                "v": "2","ps": f"{Nodename}-VMess","add": CFIP,"port": CFPORT,"id": UUID,"aid": "0","scy": "auto","net": "ws","type": "none",
+                "host": argo_domain,"path": "/vmess-argo?ed=2560","tls": "tls","sni": argo_domain,"alpn": "","fp": "firefox"
+            }
+            vmess_node = f"vmess://{base64.b64encode(json.dumps(vmess_config).encode()).decode()}"
+            sub_txt = f"{vless_node}\n{vmess_node}"
 
     if TUIC_PORT is not None:
         insecure_flag = "" if use_custom_cert else "&allow_insecure=1"
@@ -732,14 +774,16 @@ def clean_files():
     def _cleanup():
         time.sleep(90)
         files_to_delete =[boot_log_path, config_path, list_path, web_path, bot_path, php_path, npm_path, km_path]
-        if NEZHA_PORT: files_to_delete.append(npm_path)
-        elif NEZHA_SERVER and NEZHA_KEY: files_to_delete.append(php_path)
         for file in files_to_delete:
             try:
                 if os.path.exists(file):
                     if os.path.isdir(file): shutil.rmtree(file)
                     else: os.remove(file)
             except: pass
+            
+        if KOMARI_SERVER and KOMARI_KEY and not os.path.exists(km_path):
+            km_state["stopped"] = True
+            
         print('\033c', end='')
         print('App is successfully running.\nThank you for using this script, enjoy!')
     threading.Thread(target=_cleanup, daemon=True).start()
