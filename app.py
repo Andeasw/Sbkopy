@@ -51,7 +51,6 @@ DOMAIN_NAME = os.environ.get('DOMAIN_NAME', '')
 DOMAIN_CERT = os.environ.get('DOMAIN_CERT', '')
 DOMAIN_KEY = os.environ.get('DOMAIN_KEY', '')
 
-# Port Variables Parse
 S5_PORT = int(S5_PORT_STR) if S5_PORT_STR and S5_PORT_STR.isdigit() else None
 TUIC_PORT = int(TUIC_PORT_STR) if TUIC_PORT_STR and TUIC_PORT_STR.isdigit() else None
 HY2_PORT = int(HY2_PORT_STR) if HY2_PORT_STR and HY2_PORT_STR.isdigit() else None
@@ -169,32 +168,56 @@ def cleanup_old_files():
             pass
 
 class RequestHandler(BaseHTTPRequestHandler):
+
     def do_GET(self):
         if self.path == '/':
+            index_path = os.path.join(FILE_PATH, 'index.html')
+
+            fake_nginx = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to nginx!</title>
+    <style>
+        body {
+            width: 35em;
+            margin: 0 auto;
+            font-family: Tahoma, Verdana, Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to nginx!</h1>
+    <p>If you see this page, the nginx web server is successfully installed and working.</p>
+    <p>For online documentation and support please refer to nginx.org.</p>
+</body>
+</html>"""
+
             try:
-                index_path = os.path.join(FILE_PATH, 'index.html')
                 if os.path.exists(index_path):
                     with open(index_path, 'rb') as f:
                         content = f.read()
+
                     self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
+                    self.send_header('Content-type', 'text/html; charset=utf-8')
                     self.end_headers()
                     self.wfile.write(content)
                 else:
                     self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
+                    self.send_header('Content-type', 'text/html; charset=utf-8')
                     self.end_headers()
-                    self.wfile.write(f'Hello world!<br><br>You can visit /{SUB_PATH} (Default: /sub) to get your nodes!'.encode())
+                    self.wfile.write(fake_nginx)
+
             except Exception:
                 self.send_response(200)
-                self.send_header('Content-type', 'text/html')
+                self.send_header('Content-type', 'text/html; charset=utf-8')
                 self.end_headers()
-                self.wfile.write(f'Hello world!<br><br>You can visit /{SUB_PATH} (Default: /sub) to get your nodes!'.encode())
-            
+                self.wfile.write(fake_nginx)
+
         elif self.path == f'/{SUB_PATH}':
             try:
                 with open(sub_path, 'rb') as f:
                     content = f.read()
+
                 self.send_response(200)
                 self.send_header('Content-type', 'text/plain')
                 self.end_headers()
@@ -202,6 +225,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             except:
                 self.send_response(404)
                 self.end_headers()
+
         else:
             self.send_response(404)
             self.end_headers()
