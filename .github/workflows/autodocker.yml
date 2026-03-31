@@ -13,7 +13,7 @@ on:
       version:
         description: 'Docker image version tag (e.g., v1.0.0, latest)'
         required: true
-        default: 'latest' # 默认版本号为 latest
+        default: 'latest'
 
 jobs:
   build:
@@ -38,38 +38,33 @@ jobs:
       - name: Set lower case variables and image tags
         id: set_vars
         run: |
-          # 将 repository owner 转换为小写
+          # 转小写
           REPO_OWNER_LOWER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          # 将 repository name 转换为小写，这将作为镜像名称
           REPO_NAME_LOWER=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')
 
-          # 根据触发方式确定版本号
+          # 确定版本号
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # 如果是手动触发，使用输入的版本号
             VERSION_TAG="${{ github.event.inputs.version }}"
           else
-            # 如果是 push 或 pull_request 触发，使用 commit SHA 作为版本号 (或者你可以选择其他逻辑，例如 'latest')
-            VERSION_TAG="${{ github.sha }}" # 使用 commit SHA 作为版本号
-            # 或者如果你想在 push/pull_request 也默认用 latest
-            # VERSION_TAG="latest"
+            VERSION_TAG="${{ github.sha }}"
           fi
 
           IMAGE_TAGS="ghcr.io/${REPO_OWNER_LOWER}/${REPO_NAME_LOWER}:${VERSION_TAG}"
           if [[ "${VERSION_TAG}" != "latest" ]]; then
-            IMAGE_TAGS="${IMAGE_TAGS}\nghcr.io/${REPO_OWNER_LOWER}/${REPO_NAME_LOWER}:latest"
+            IMAGE_TAGS="${IMAGE_TAGS} ghcr.io/${REPO_OWNER_LOWER}/${REPO_NAME_LOWER}:latest"
           fi
 
           echo "REPO_OWNER_LOWER=${REPO_OWNER_LOWER}" >> "$GITHUB_OUTPUT"
           echo "REPO_NAME_LOWER=${REPO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
           echo "IMAGE_TAGS=${IMAGE_TAGS}" >> "$GITHUB_OUTPUT"
-          echo "VERSION_TAG=${VERSION_TAG}" >> "$GITHUB_OUTPUT" 
+          echo "VERSION_TAG=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: ${{ github.repository_owner == 'andeasw' && github.event_name != 'pull_request' }}
-          tags: ${{ steps.set_vars.outputs.IMAGE_TAGS }} 
+          tags: ${{ steps.set_vars.outputs.IMAGE_TAGS }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=${{ steps.set_vars.outputs.REPO_NAME_LOWER }} Server
