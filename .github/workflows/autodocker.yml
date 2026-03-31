@@ -21,6 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,8 +39,8 @@ jobs:
       - name: Set lower case variables
         id: set_vars
         run: |
-          REPO_OWNER_LOWER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          REPO_NAME_LOWER=$(echo '${{ github.event.repository.name }}' | tr '[:upper:]' '[:lower:]')
+          REPO_OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          REPO_NAME_LOWER=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION_TAG="${{ github.event.inputs.version }}"
@@ -47,15 +48,15 @@ jobs:
             VERSION_TAG="${{ github.sha }}"
           fi
 
-          echo "REPO_OWNER=${REPO_OWNER_LOWER}" >> "$GITHUB_OUTPUT"
-          echo "REPO_NAME=${REPO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
-          echo "VERSION=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+          echo "REPO_OWNER=$REPO_OWNER_LOWER" >> "$GITHUB_OUTPUT"
+          echo "REPO_NAME=$REPO_NAME_LOWER" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.repository_owner == 'andeasw' && github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/${{ steps.set_vars.outputs.REPO_OWNER }}/${{ steps.set_vars.outputs.REPO_NAME }}:${{ steps.set_vars.outputs.VERSION }}
             ghcr.io/${{ steps.set_vars.outputs.REPO_OWNER }}/${{ steps.set_vars.outputs.REPO_NAME }}:latest
