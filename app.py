@@ -22,7 +22,7 @@ PROJECT_URL = os.environ.get('PROJECT_URL', '')
 AUTO_ACCESS = os.environ.get('AUTO_ACCESS', 'false').lower() == 'true'
 FILE_PATH = os.environ.get('FILE_PATH', '.cache')
 SUB_PATH = os.environ.get('SUB_PATH', 'subb')
-UUID = os.environ.get('UUID', 'cbca0730-66c5-42a0-a4c5-d16c97069a53')
+UUID = os.environ.get('UUID', 'd6d1f62f-a013-4cf4-a24b-e66a70c6e09a')
 NEZHA_SERVER = os.environ.get('NEZHA_SERVER', '')
 NEZHA_PORT = os.environ.get('NEZHA_PORT', '')
 NEZHA_KEY = os.environ.get('NEZHA_KEY', '')
@@ -57,7 +57,6 @@ HY2_PORT = int(HY2_PORT_STR) if HY2_PORT_STR and HY2_PORT_STR.isdigit() else Non
 ANYTLS_PORT = int(ANYTLS_PORT_STR) if ANYTLS_PORT_STR and ANYTLS_PORT_STR.isdigit() else None
 REALITY_PORT = int(REALITY_PORT_STR) if REALITY_PORT_STR and REALITY_PORT_STR.isdigit() else None
 ANYREALITY_PORT = int(ANYREALITY_PORT_STR) if ANYREALITY_PORT_STR and ANYREALITY_PORT_STR.isdigit() else None
-
 # Global variables
 private_key = ''
 public_key = ''
@@ -99,7 +98,7 @@ def start_komari_daemon(bin_path, endpoint, token):
                     stderr=subprocess.DEVNULL
                 )
                 km_state["proc"] = proc
-                proc.wait()  # Block until process exits/crashes
+                proc.wait()
             except Exception:
                 pass
             finally:
@@ -119,7 +118,6 @@ def start_komari_daemon(bin_path, endpoint, token):
 
     t = threading.Thread(target=run_loop, daemon=True)
     t.start()
-# ────────────────────────────────────────────────────────────
 
 def create_directory():
     print('\033c', end='')
@@ -140,7 +138,7 @@ def delete_nodes():
             return None
 
         decoded = base64.b64decode(file_content).decode('utf-8')
-        nodes =[line for line in decoded.split('\n') if any(protocol in line for protocol in['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://', 'anytls://', 'socks://'])]
+        nodes =[line for line in decoded.split('\n') if any(protocol in line for protocol in['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://', 'anytls://', 'socks://', 'http://'])]
 
         if not nodes:
             return
@@ -571,7 +569,7 @@ uuid: {UUID}"""
     
     if S5_PORT and S5_PORT > 0:
         s5_config = {
-            "tag": "s5-in", "type": "socks", "listen": "::", "listen_port": S5_PORT,
+            "tag": "mixed-in", "type": "mixed", "listen": "::", "listen_port": S5_PORT,
             "users": [{"username": UUID[0:8], "password": socks_password}]
         }
         config["inbounds"].append(s5_config)
@@ -698,7 +696,7 @@ def upload_nodes():
     elif UPLOAD_URL:
         if not os.path.exists(list_path): return
         with open(list_path, 'r') as f: content = f.read()
-        nodes =[line for line in content.split('\n') if any(protocol in line for protocol in['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://', 'anytls://', 'socks://'])]
+        nodes =[line for line in content.split('\n') if any(protocol in line for protocol in['vless://', 'vmess://', 'trojan://', 'hysteria2://', 'tuic://', 'anytls://', 'socks://', 'http://'])]
         if not nodes: return
         try:
             requests.post(f"{UPLOAD_URL}/api/add-nodes",
@@ -777,7 +775,9 @@ async def generate_links(argo_domain):
     if S5_PORT is not None:
         S5_AUTH = base64.b64encode(f"{UUID[0:8]}:{socks_password}".encode()).decode()
         s5_node = f"\nsocks://{S5_AUTH}@{SERVER_IP}:{S5_PORT}#{Nodename}"
-        sub_txt = (sub_txt + s5_node) if sub_txt else s5_node
+        http_node = f"\nhttp://{UUID[0:8]}:{socks_password}@{SERVER_IP}:{S5_PORT}#{Nodename}-HTTP"
+        added_nodes = s5_node + http_node
+        sub_txt = (sub_txt + added_nodes) if sub_txt else added_nodes.strip()
 
     with open(sub_path, 'w') as f: f.write(base64.b64encode(sub_txt.encode()).decode())
     with open(list_path, 'w') as f: f.write(sub_txt)
